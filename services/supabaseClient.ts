@@ -23,6 +23,8 @@ const getEnvVar = (key: string): string => {
 const supabaseUrl = getEnvVar('SUPABASE_URL');
 const supabaseKey = getEnvVar('SUPABASE_KEY');
 
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
+
 // Se as variáveis não existirem, usamos valores placeholder para evitar o crash
 // "Uncaught Error: supabaseUrl is required" durante a inicialização.
 // As requisições falharão, mas o app abrirá.
@@ -35,8 +37,18 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(finalUrl, finalKey);
 
-// Utilitário para converter Base64 em Blob para upload
+// Utilitário para converter Base64 em Blob para upload sem usar fetch
 export const base64ToBlob = async (base64: string): Promise<Blob> => {
-  const res = await fetch(base64);
-  return await res.blob();
+  // Separa o cabeçalho data:image/type;base64, do conteúdo
+  const parts = base64.split(';base64,');
+  const contentType = parts[0].split(':')[1];
+  const raw = window.atob(parts[1]);
+  const rawLength = raw.length;
+  const uInt8Array = new Uint8Array(rawLength);
+
+  for (let i = 0; i < rawLength; ++i) {
+    uInt8Array[i] = raw.charCodeAt(i);
+  }
+
+  return new Blob([uInt8Array], { type: contentType });
 };

@@ -3,7 +3,7 @@ import { PlusCircle, Calendar, Download, Loader2, Trash2, AlertTriangle } from '
 import { Button } from './Button';
 import { ImageComparisonSlider } from './ImageComparisonSlider';
 import { ViewState, HistoryItem } from '../types';
-import { supabase } from '../services/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -22,6 +22,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }, []);
 
   const fetchHistory = async () => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const { data, error } = await supabase

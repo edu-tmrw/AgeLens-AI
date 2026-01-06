@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import { ViewState } from '../types';
-import { supabase } from '../services/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 interface AuthScreenProps {
   view: 'login' | 'register';
@@ -24,6 +24,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ view, onNavigate, onLogi
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      setError("Sistema não configurado. Defina SUPABASE_URL e SUPABASE_KEY nas variáveis de ambiente.");
+      return;
+    }
 
     try {
       if (isLogin) {
