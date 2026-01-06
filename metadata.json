@@ -1,0 +1,5 @@
+{
+  "name": "AgeLens AI",
+  "description": "Um aplicativo que utiliza a IA NanoBanana para simular o envelhecimento em fotos de usuários.",
+  "requestFramePermissions": []
+}
