@@ -4,7 +4,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { Dashboard } from './components/Dashboard';
 import { ImageGenerator } from './components/ImageGenerator';
 import { User, ViewState, HistoryItem } from './types';
-import { supabase, isSupabaseConfigured } from './services/supabaseClient';
+import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -12,32 +12,14 @@ const App: React.FC = () => {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   useEffect(() => {
-    // If credentials are missing, don't try to fetch session to avoid network errors
-    if (!isSupabaseConfigured) {
-      console.log('Supabase credentials missing, skipping session check.');
-      setIsLoadingSession(false);
-      return;
-    }
-
     // Check active session on load
-    const checkSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        if (session?.user) {
-          mapSessionToUser(session.user);
-          setCurrentView('dashboard');
-        }
-      } catch (err) {
-        console.warn("Could not check session (offline or unconfigured):", err);
-        // We don't block the app, just assume logged out
-      } finally {
-        setIsLoadingSession(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        mapSessionToUser(session.user);
+        setCurrentView('dashboard');
       }
-    };
-
-    checkSession();
+      setIsLoadingSession(false);
+    });
 
     // Listen for changes
     const {
@@ -78,9 +60,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
-    }
+    await supabase.auth.signOut();
     setUser(null);
     setCurrentView('login');
   };

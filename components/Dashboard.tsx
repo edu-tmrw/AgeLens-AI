@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { PlusCircle, Calendar, Download, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Calendar, Download, Loader2, Trash2, AlertTriangle, X } from 'lucide-react';
 import { Button } from './Button';
 import { ImageComparisonSlider } from './ImageComparisonSlider';
 import { ViewState, HistoryItem } from '../types';
-import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 
 interface DashboardProps {
   onNavigate: (view: ViewState) => void;
@@ -22,11 +22,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }, []);
 
   const fetchHistory = async () => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -80,33 +75,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     try {
       setIsDeleting(true);
 
-      // 1. PRIMEIRO: Remover registro do Banco de Dados
-      // Isso garante que se falhar (por permissão RLS, etc), não apagamos as imagens
-      const { error: dbError } = await supabase
-        .from('generations')
-        .delete()
-        .eq('id', itemToDelete.id);
-
-      if (dbError) {
-        throw new Error(`Erro ao excluir do banco: ${dbError.message}`);
-      }
-
-      // 2. SEGUNDO: Remover arquivos do Storage
-      // Extração de caminhos
+      // 1. Extract paths from URLs to delete from Storage
+      // URL format: .../agelens-images/userId/filename.ext
       const getPathFromUrl = (url: string) => {
-        try {
-          const urlObj = new URL(url);
-          const pathParts = urlObj.pathname.split('/');
-          const bucketIndex = pathParts.indexOf('agelens-images');
-          
-          if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
-            return decodeURIComponent(pathParts.slice(bucketIndex + 1).join('/'));
-          }
-          return null;
-        } catch (e) {
-          console.error("Erro ao processar URL para exclusão:", e);
-          return null;
+        const marker = '/agelens-images/';
+        const index = url.indexOf(marker);
+        if (index !== -1) {
+          return url.substring(index + marker.length);
         }
+        return null;
       };
 
       const originalPath = getPathFromUrl(itemToDelete.originalUrl);
@@ -118,19 +95,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           .from('agelens-images')
           .remove(pathsToDelete);
         
-        if (storageError) {
-          // Apenas logamos o erro de storage, pois o registro principal já foi removido
-          console.error('Aviso: Registro excluído, mas falha ao limpar arquivos do storage:', storageError);
-        }
+        if (storageError) console.error('Erro ao deletar arquivos:', storageError);
       }
 
-      // 3. Atualizar a UI
+      // 2. Delete from Database
+      const { error: dbError } = await supabase
+        .from('generations')
+        .delete()
+        .eq('id', itemToDelete.id);
+
+      if (dbError) throw dbError;
+
+      // 3. Update UI
       setHistory(prev => prev.filter(item => item.id !== itemToDelete.id));
       setItemToDelete(null);
 
-    } catch (error: any) {
-      console.error('Erro fatal ao excluir:', error);
-      alert(`Não foi possível excluir a imagem: ${error.message || 'Erro desconhecido'}`);
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      alert('Não foi possível excluir a imagem. Tente novamente.');
     } finally {
       setIsDeleting(false);
     }
@@ -183,17 +165,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Actions Footer */}
-                <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-slate-700/50">
+                <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-700/50">
                     <button 
                       onClick={() => handleDownload(item.generatedUrl, item.id)}
-                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors group/btn"
+                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
                       title="Baixar imagem"
                     >
                       <Download className="w-5 h-5" />
                     </button>
                     <button 
                       onClick={() => setItemToDelete(item)}
-                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors group/btn"
+                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Excluir"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -232,9 +214,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <h3 className="text-xl font-bold text-white">Excluir imagem?</h3>
             </div>
             
-            <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-              Tem certeza que deseja excluir esta transformação? <br/>
-              Essa ação removerá os arquivos e não pode ser desfeita.
+            <p className="text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta transformação? Essa ação não pode ser desfeita e removerá os arquivos permanentemente.
             </p>
 
             <div className="flex gap-3 justify-end">
@@ -242,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 variant="secondary" 
                 onClick={() => setItemToDelete(null)}
                 disabled={isDeleting}
-                className="flex-1"
+                className="w-full"
               >
                 Cancelar
               </Button>
@@ -250,9 +231,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 variant="primary" 
                 onClick={confirmDelete}
                 isLoading={isDeleting}
-                className="flex-1 bg-red-600 hover:bg-red-700 shadow-red-500/20 focus:ring-red-500 border-transparent"
+                className="w-full bg-red-600 hover:bg-red-700 shadow-red-500/20 focus:ring-red-500"
               >
-                Sim, excluir
+                Excluir
               </Button>
             </div>
           </div>

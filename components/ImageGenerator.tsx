@@ -4,7 +4,7 @@ import { Button } from './Button';
 import { ImageComparisonSlider } from './ImageComparisonSlider';
 import { generateAgingEffect } from '../services/geminiService';
 import { ProcessingStatus, ImageState, HistoryItem, AgingStyle } from '../types';
-import { supabase, base64ToBlob, isSupabaseConfigured } from '../services/supabaseClient';
+import { supabase, base64ToBlob } from '../services/supabaseClient';
 
 interface ImageGeneratorProps {
   onSave?: (item: HistoryItem) => void;
@@ -130,11 +130,6 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onSave, userId }
 
   const handleSaveToGallery = async () => {
     if (!images.original || !images.generated || !onSave || !userId) return;
-
-    if (!isSupabaseConfigured) {
-      setError('Armazenamento em nuvem não configurado. Download disponível apenas localmente.');
-      return;
-    }
 
     try {
       setIsSaving(true);
