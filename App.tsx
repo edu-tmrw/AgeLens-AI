@@ -15,10 +15,11 @@ const App: React.FC = () => {
     // Check active session on load
     const initSession = async () => {
       try {
-        // Compatibility handling for Supabase v1 types
-        const auth = supabase.auth as any;
-        const session = auth.session ? auth.session() : (await auth.getSession())?.data?.session;
+        // Standard V2: getSession returns { data: { session }, error }
+        const { data: { session }, error } = await supabase.auth.getSession();
         
+        if (error) throw error;
+
         if (session?.user) {
           mapSessionToUser(session.user);
           setCurrentView('dashboard');
@@ -32,12 +33,15 @@ const App: React.FC = () => {
 
     initSession();
 
-    // Listen for changes
-    const auth = supabase.auth as any;
-    const { data: authListener } = auth.onAuthStateChange((_event: string, session: any) => {
+    // Listen for changes - Standard V2 syntax
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         mapSessionToUser(session.user);
-        setCurrentView('dashboard');
+        // Only switch to dashboard if we are currently on login/register pages
+        // This prevents redirecting away if the user refreshes on 'generator' view (though simplistic)
+        if (currentView === 'login' || currentView === 'register') {
+             setCurrentView('dashboard');
+        }
       } else {
         setUser(null);
         if (_event === 'SIGNED_OUT') {
@@ -47,13 +51,9 @@ const App: React.FC = () => {
     });
 
     return () => {
-      if (authListener?.unsubscribe) {
-        authListener.unsubscribe();
-      } else if (authListener?.subscription?.unsubscribe) {
-        authListener.subscription.unsubscribe();
-      }
+      subscription.unsubscribe();
     };
-  }, []); 
+  }, []); // Remove dependencies to avoid re-subscribing unnecessarily
 
   const mapSessionToUser = (authUser: any) => {
     setUser({
@@ -69,8 +69,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    const auth = supabase.auth as any;
-    await auth.signOut();
+    await supabase.auth.signOut();
     setUser(null);
     setCurrentView('login');
   };

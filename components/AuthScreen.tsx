@@ -26,28 +26,31 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ view, onNavigate, onLogi
     setError(null);
 
     try {
-      const auth = supabase.auth as any;
       if (isLogin) {
-        const { error } = await auth.signIn({
+        // Supabase v2: signInWithPassword
+        const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
       } else {
-        const { error } = await auth.signUp({
+        // Supabase v2: Metadata goes into options
+        const { error } = await supabase.auth.signUp({
           email,
           password,
-        }, {
-          data: {
-            full_name: fullName,
-            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` // Auto avatar
-          },
+          options: {
+            data: {
+              full_name: fullName,
+              avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` // Auto avatar
+            },
+          }
         });
         if (error) throw error;
       }
       
       onLogin(); // State update handled by App.tsx listener
     } catch (err: any) {
+      console.error("Auth error:", err);
       setError(err.message || 'Ocorreu um erro na autenticação.');
     } finally {
       setLoading(false);
