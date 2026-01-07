@@ -13,13 +13,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Check active session on load
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        mapSessionToUser(session.user);
-        setCurrentView('dashboard');
+    const initSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (session?.user) {
+          mapSessionToUser(session.user);
+          setCurrentView('dashboard');
+        }
+      } catch (err) {
+        console.error("Erro ao verificar sessão:", err);
+      } finally {
+        setIsLoadingSession(false);
       }
-      setIsLoadingSession(false);
-    });
+    };
+
+    initSession();
 
     // Listen for changes
     const {
@@ -27,16 +37,9 @@ const App: React.FC = () => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         mapSessionToUser(session.user);
-        // Note: currentView in this closure will be the initial value, which is fine
-        // as we generally want to redirect to dashboard upon login from any auth screen
         setCurrentView('dashboard');
       } else {
         setUser(null);
-        // Only redirect to login if we lose session, but don't force it 
-        // if the user is explicitly navigating between auth screens locally
-        // However, checking stale state is hard. 
-        // Since this callback fires on SIGN_OUT, we force login.
-        // On initial load without session, we also force login (which is default).
         if (_event === 'SIGNED_OUT') {
             setCurrentView('login');
         }
@@ -44,7 +47,7 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []); // Dependency array empty to run only once on mount
+  }, []); 
 
   const mapSessionToUser = (authUser: any) => {
     setUser({
@@ -74,13 +77,17 @@ const App: React.FC = () => {
   };
 
   const handleSaveToGallery = (item: HistoryItem) => {
-    // Navigation happens after save, forcing a refresh of dashboard data when visited
     setCurrentView('dashboard');
   };
 
   const renderView = () => {
     if (isLoadingSession) {
-      return <div className="flex-1 flex items-center justify-center text-slate-500">Carregando...</div>;
+      return <div className="flex-1 flex items-center justify-center text-slate-500">
+        <div className="flex flex-col items-center gap-2">
+           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+           <span>Carregando...</span>
+        </div>
+      </div>;
     }
 
     switch (currentView) {

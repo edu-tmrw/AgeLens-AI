@@ -1,8 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 import { AgingStyle } from "../types";
+import { getEnvVar } from "./env";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Não inicializamos o cliente no nível global para evitar erros de 'process is not defined'
+// O cliente será criado apenas quando necessário.
+let aiClient: GoogleGenAI | null = null;
+
+const getAIClient = () => {
+  if (aiClient) return aiClient;
+
+  const apiKey = getEnvVar('API_KEY');
+  
+  if (!apiKey) {
+    console.error("API Key do Gemini não encontrada.");
+    throw new Error("Chave de API não configurada. Verifique as variáveis de ambiente (API_KEY).");
+  }
+
+  aiClient = new GoogleGenAI({ apiKey });
+  return aiClient;
+};
 
 const STYLE_PROMPTS = {
   rustico: "Transform this image to make the person look significantly older (approx 85 years old). Apply deep, pronounced wrinkles, weathered and sun-damaged skin texture, heavy eye bags, and a tired, rugged look. Focus on intense aging signs. Maintain original facial structure and background.",
@@ -15,6 +31,7 @@ const STYLE_PROMPTS = {
  */
 export const generateAgingEffect = async (base64Image: string, style: AgingStyle = 'natural'): Promise<string> => {
   try {
+    const ai = getAIClient();
     const base64Data = base64Image.split(',')[1] || base64Image;
 
     const response = await ai.models.generateContent({
@@ -44,8 +61,11 @@ export const generateAgingEffect = async (base64Image: string, style: AgingStyle
     
     throw new Error("A resposta da IA não continha dados de imagem.");
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating aging effect:", error);
+    if (error.message?.includes("API Key")) {
+        throw error;
+    }
     throw new Error("Falha ao processar a imagem. Tente novamente.");
   }
 };
