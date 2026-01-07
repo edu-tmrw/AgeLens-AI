@@ -15,8 +15,9 @@ const App: React.FC = () => {
     // Check active session on load
     const initSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
+        // Compatibility handling for Supabase v1 types
+        const auth = supabase.auth as any;
+        const session = auth.session ? auth.session() : (await auth.getSession())?.data?.session;
         
         if (session?.user) {
           mapSessionToUser(session.user);
@@ -32,9 +33,8 @@ const App: React.FC = () => {
     initSession();
 
     // Listen for changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const auth = supabase.auth as any;
+    const { data: authListener } = auth.onAuthStateChange((_event: string, session: any) => {
       if (session?.user) {
         mapSessionToUser(session.user);
         setCurrentView('dashboard');
@@ -46,7 +46,13 @@ const App: React.FC = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (authListener?.unsubscribe) {
+        authListener.unsubscribe();
+      } else if (authListener?.subscription?.unsubscribe) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, []); 
 
   const mapSessionToUser = (authUser: any) => {
@@ -63,7 +69,8 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    const auth = supabase.auth as any;
+    await auth.signOut();
     setUser(null);
     setCurrentView('login');
   };

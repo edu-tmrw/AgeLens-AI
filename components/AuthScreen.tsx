@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import { ViewState } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -26,21 +26,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ view, onNavigate, onLogi
     setError(null);
 
     try {
+      const auth = supabase.auth as any;
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await auth.signIn({
           email,
           password,
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { error } = await auth.signUp({
           email,
           password,
-          options: {
-            data: {
-              full_name: fullName,
-              avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` // Auto avatar
-            },
+        }, {
+          data: {
+            full_name: fullName,
+            avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}` // Auto avatar
           },
         });
         if (error) throw error;
@@ -81,7 +81,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ view, onNavigate, onLogi
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-300">Nome</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                  <UserIcon className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
                   <input 
                     type="text" 
                     value={fullName}

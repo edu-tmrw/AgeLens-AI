@@ -1,11 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { getEnvVar } from './env';
 
-// Tenta pegar das variáveis de ambiente, se não existir, usa as chaves fornecidas como fallback
-const supabaseUrl = getEnvVar('SUPABASE_URL') || 'https://nxxnebudvwakkezsiqyr.supabase.co';
-const supabaseKey = getEnvVar('SUPABASE_KEY') || 'sb_publishable_-YwbRk35XtOBS1MTZmkYDw_dkE-Pnb4';
+// Tenta pegar das variáveis de ambiente.
+const supabaseUrl = getEnvVar('SUPABASE_URL') || 'https://placeholder.supabase.co';
 
-export const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
+// Chave placeholder no formato JWT para evitar erros de parser na inicialização do cliente
+// (Header.Payload.Signature) - Isso previne crash síncrono da biblioteca supabase-js
+const placeholderKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNTE2MjM5MDIyfQ.MOCK_SIGNATURE_FOR_CLIENT_INIT_ONLY';
+
+const supabaseKey = getEnvVar('SUPABASE_KEY') || placeholderKey;
+
+// Flag para saber se estamos usando credenciais reais
+export const isSupabaseConfigured = supabaseUrl !== 'https://placeholder.supabase.co' && supabaseKey !== placeholderKey;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
