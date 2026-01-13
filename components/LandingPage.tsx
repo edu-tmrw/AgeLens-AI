@@ -126,7 +126,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
            </p>
            <Button 
               onClick={() => onNavigate('register')}
-              className="px-10 py-5 text-lg bg-white text-indigo-900 hover:bg-slate-100 shadow-xl shadow-white/10 font-bold"
+              className="px-10 py-5 text-lg bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-500/20 font-bold mx-auto"
             >
               Criar Minha Conta Grátis
            </Button>
