@@ -34,4 +34,4 @@ export interface HistoryItem {
   style?: AgingStyle;
 }
 
-export type ViewState = 'login' | 'register' | 'dashboard' | 'generator';
+export type ViewState = 'landing' | 'login' | 'register' | 'dashboard' | 'generator';

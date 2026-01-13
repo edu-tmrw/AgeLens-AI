@@ -142,7 +142,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onSave, userId }
       // 2. Upload Original to Supabase Storage
       const originalPath = `${userId}/${timestamp}_original.jpg`;
       const { error: uploadOrigError } = await supabase.storage
-        .from('agelens-images')
+        .from('05de1dbb-754c-4412-bce8-b2c3bb671648')
         .upload(originalPath, originalBlob);
 
       if (uploadOrigError) throw uploadOrigError;
@@ -150,18 +150,18 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onSave, userId }
       // 3. Upload Generated to Supabase Storage
       const generatedPath = `${userId}/${timestamp}_${selectedStyle}.png`;
       const { error: uploadGenError } = await supabase.storage
-        .from('agelens-images')
+        .from('05de1dbb-754c-4412-bce8-b2c3bb671648')
         .upload(generatedPath, generatedBlob);
 
       if (uploadGenError) throw uploadGenError;
 
       // 4. Get Public URLs
       const { data: { publicUrl: originalUrl } } = supabase.storage
-        .from('agelens-images')
+        .from('05de1dbb-754c-4412-bce8-b2c3bb671648')
         .getPublicUrl(originalPath);
 
       const { data: { publicUrl: generatedUrl } } = supabase.storage
-        .from('agelens-images')
+        .from('05de1dbb-754c-4412-bce8-b2c3bb671648')
         .getPublicUrl(generatedPath);
 
       // 5. Save Record to Database

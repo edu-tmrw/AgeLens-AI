@@ -1,15 +1,74 @@
 import React, { useEffect, useState } from 'react';
-import { PlusCircle, Calendar, Download, Loader2, Trash2, AlertTriangle, X } from 'lucide-react';
+import { PlusCircle, Calendar, Download, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import { ImageComparisonSlider } from './ImageComparisonSlider';
-import { ViewState, HistoryItem } from '../types';
+import { ViewState, HistoryItem, User } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { getEnvVar } from '../services/env';
 
 interface DashboardProps {
+  user: User | null;
   onNavigate: (view: ViewState) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+// Helper to fix URLs if data was restored from a different project or bucket
+const fixStorageUrl = (originalUrl: string): string => {
+  if (!originalUrl) return '';
+  
+  // Current Storage Config
+  const SUPABASE_URL = getEnvVar('SUPABASE_URL');
+  const CURRENT_BUCKET = '05de1dbb-754c-4412-bce8-b2c3bb671648';
+
+  // If URL is already correct, return it
+  if (originalUrl.includes(SUPABASE_URL) && originalUrl.includes(CURRENT_BUCKET)) {
+    return originalUrl;
+  }
+
+  // If it's a relative path or from an old bucket, try to reconstruct it
+  // We assume the file path structure is consistently "userId/filename" or similar at the end
+  try {
+    const urlParts = originalUrl.split('/public/');
+    if (urlParts.length > 1) {
+      // urlParts[1] might look like "old-bucket/user123/file.jpg" or just "user123/file.jpg"
+      const pathParts = urlParts[1].split('/');
+      
+      // If the first part is NOT a user ID (assuming UUID length approx 36), it might be the old bucket name
+      // We skip the bucket name part if it exists to find the file path
+      let filePath = urlParts[1];
+      
+      // Simple heuristic: if the first segment is not the current bucket, and we have multiple segments, 
+      // check if we need to swap the bucket.
+      // For safety, let's just find the part that looks like a path.
+      // Usually: bucketName/userId/filename
+      
+      if (pathParts.length >= 2) {
+         // Reconstruct using the current project URL and current Bucket
+         // We assume the last 2 parts are reliable (userId/filename) or everything after the bucket is.
+         // Let's assume the old bucket was part of the path in the 'public' segment.
+         
+         // Remove the old bucket name from the path if present
+         const potentialBucket = pathParts[0];
+         // If the first part matches the current bucket, we are good (already handled above).
+         // If not, we replace it.
+         
+         const relativePath = pathParts.slice(1).join('/'); // removes old bucket name
+         // HOWEVER, sometimes the URL stored is just public/bucket/file. 
+         // Sometimes it's public/file (if bucket is implicit? no).
+         
+         // SAFEST BET: Use the path as is if it looks like userId/file, otherwise replace bucket.
+         // Let's try to just point to the new project + new bucket + everything after the old bucket.
+         
+         return `${SUPABASE_URL}/storage/v1/object/public/${CURRENT_BUCKET}/${relativePath}`;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fix URL:", originalUrl);
+  }
+
+  return originalUrl;
+};
+
+export const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -18,15 +77,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
+      
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('generations')
         .select('*')
+        .eq('user_id', user.id) // Explicitly filter by user to ensure we hit RLS correctly or filter manually
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -35,8 +100,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         const formattedHistory: HistoryItem[] = data.map(item => ({
           id: item.id,
           date: item.created_at,
-          originalUrl: item.original_path,
-          generatedUrl: item.generated_path,
+          // Apply fixStorageUrl to handle migration cases
+          originalUrl: fixStorageUrl(item.original_path),
+          generatedUrl: fixStorageUrl(item.generated_path),
           description: `Transformação ${item.style ? item.style.charAt(0).toUpperCase() + item.style.slice(1) : ''}`,
           style: item.style
         }));
@@ -76,12 +142,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       setIsDeleting(true);
 
       // 1. Extract paths from URLs to delete from Storage
-      // URL format: .../agelens-images/userId/filename.ext
+      // URL format: .../05de1dbb-754c-4412-bce8-b2c3bb671648/userId/filename.ext
       const getPathFromUrl = (url: string) => {
-        const marker = '/agelens-images/';
+        const marker = '/05de1dbb-754c-4412-bce8-b2c3bb671648/';
         const index = url.indexOf(marker);
         if (index !== -1) {
           return url.substring(index + marker.length);
+        }
+        // Fallback for older URLs or different buckets
+        const parts = url.split('/');
+        // Assuming last 2 parts are userId/filename
+        if (parts.length >= 2) {
+            return `${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
         }
         return null;
       };
@@ -92,7 +164,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       if (pathsToDelete.length > 0) {
         const { error: storageError } = await supabase.storage
-          .from('agelens-images')
+          .from('05de1dbb-754c-4412-bce8-b2c3bb671648')
           .remove(pathsToDelete);
         
         if (storageError) console.error('Erro ao deletar arquivos:', storageError);
@@ -191,12 +263,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 mb-4">
                 <PlusCircle className="w-8 h-8 text-slate-600" />
               </div>
-              <h3 className="text-lg font-medium text-slate-300">Nenhuma imagem ainda</h3>
+              <h3 className="text-lg font-medium text-slate-300">Nenhuma imagem encontrada</h3>
               <p className="text-slate-500 max-w-sm mx-auto mt-2 mb-6">
-                Você ainda não realizou nenhuma transformação. Comece agora para ver o resultado!
+                Não encontramos transformações para sua conta. Se você restaurou um backup, verifique se está logado na conta correta.
               </p>
               <Button onClick={() => onNavigate('generator')} className="mx-auto">
-                Criar primeira imagem
+                Criar nova imagem
               </Button>
             </div>
           )}
@@ -215,7 +287,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
             
             <p className="text-slate-400 mb-6">
-              Tem certeza que deseja excluir esta transformação? Essa ação não pode ser desfeita e removerá os arquivos permanentemente.
+              Tem certeza que deseja excluir esta transformação? Essa ação não pode ser desfeita.
             </p>
 
             <div className="flex gap-3 justify-end">

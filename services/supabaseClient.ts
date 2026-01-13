@@ -17,9 +17,14 @@ const createMockClient = () => {
   console.warn("⚠️ AgeLens AI: Credenciais do Supabase não encontradas. Usando cliente Mock em memória.");
   console.warn("⚠️ Os dados serão perdidos ao recarregar a página.");
 
+  // Shared in-memory storage (Table -> Array of objects)
+  const mockTables: Record<string, any[]> = {
+    generations: [],
+    profiles: []
+  }; 
+  
   let mockSession: any = null;
-  const mockDB: any[] = []; // In-memory database
-  const mockListeners: any[] = []; // Auth listeners
+  const mockListeners: any[] = [];
   const mockStorage: Record<string, string> = {}; // Path -> Blob URL map
 
   return {
@@ -73,38 +78,80 @@ const createMockClient = () => {
     
     // Mock Database Query Builder
     from: (table: string) => {
-      return {
-        select: function() { return this; },
-        order: function() { 
-          // Return copy of DB, assuming simple reverse order for 'desc'
-          return { data: [...mockDB].reverse(), error: null }; 
+      // Ensure table exists
+      if (!mockTables[table]) mockTables[table] = [];
+      
+      // State for the query builder
+      let currentData = [...mockTables[table]]; // Clone data for querying
+      let operation = 'select'; // 'select' | 'delete'
+      let deleteFilter: ((row: any) => boolean) | null = null;
+
+      const builder = {
+        select: function() { 
+          operation = 'select';
+          return this; 
         },
+        
+        delete: function() {
+          operation = 'delete';
+          return this;
+        },
+
+        eq: function(column: string, value: any) {
+          if (operation === 'delete') {
+            // For delete, we store the filter condition
+            deleteFilter = (row: any) => row[column] === value;
+          } else {
+            // For select, we filter the dataset immediately
+            currentData = currentData.filter(item => item[column] === value);
+          }
+          return this;
+        },
+
+        order: function(column: string, { ascending = true } = {}) {
+          if (operation === 'select') {
+            currentData.sort((a, b) => {
+              if (a[column] < b[column]) return ascending ? -1 : 1;
+              if (a[column] > b[column]) return ascending ? 1 : -1;
+              return 0;
+            });
+          }
+          return this;
+        },
+
         insert: function(row: any) {
-          // Simulate DB insert with auto-generated ID
+          // Insert works differently, it executes immediately in this mock pattern for simplicity,
+          // matching the .select().single() pattern often used.
           const newItem = { 
             ...row, 
             id: Math.random().toString(36).substring(7), 
             created_at: new Date().toISOString() 
           };
-          mockDB.push(newItem);
-          // Mimic .select().single() pattern
+          mockTables[table].push(newItem);
+          
           return { 
             select: () => ({
-              single: () => ({ data: newItem, error: null })
+              single: () => Promise.resolve({ data: newItem, error: null })
             })
           };
         },
-        delete: function() { return this; },
-        eq: function(column: string, value: any) {
-          // Simulate delete where column == value
-          const initialLength = mockDB.length;
-          const index = mockDB.findIndex(item => item[column] === value);
-          if (index > -1) {
-            mockDB.splice(index, 1);
+
+        // Enables 'await' keyword usage
+        then: function(resolve: Function, reject: Function) {
+          if (operation === 'delete') {
+            const initialLength = mockTables[table].length;
+            if (deleteFilter) {
+               mockTables[table] = mockTables[table].filter(row => !deleteFilter!(row));
+            }
+            resolve({ error: null, count: initialLength - mockTables[table].length });
+          } else {
+            // Select
+            resolve({ data: currentData, error: null });
           }
-          return { error: null, count: initialLength - mockDB.length };
         }
       };
+
+      return builder;
     },
 
     // Mock Storage
@@ -118,7 +165,7 @@ const createMockClient = () => {
         },
         getPublicUrl: (path: string) => {
           // Return the local Blob URL we stored
-          return { data: { publicUrl: mockStorage[path] || null } };
+          return { data: { publicUrl: mockStorage[path] || `https://mock.storage/${path}` } };
         },
         remove: async (paths: string[]) => {
           paths.forEach(p => delete mockStorage[p]);
